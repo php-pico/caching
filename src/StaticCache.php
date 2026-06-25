@@ -70,14 +70,10 @@ final readonly class StaticCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        $expires = null;
-        if (is_int($ttl)) {
-            $expires = time() + $ttl;
-        } elseif ($ttl instanceof DateInterval) {
-            $expires = new DateTime()->add($ttl)->getTimestamp();
-        }
-
-        $this->cache->offsetSet($key, compact('expires', 'value'));
+        $this->cache->offsetSet($key, [
+            'expires' => $this->calculateExpiration($ttl),
+            'value' => $value,
+        ]);
 
         return true;
     }
@@ -148,7 +144,7 @@ final readonly class StaticCache implements CacheInterface
      * Persists a set of key => value pairs in the cache, with an optional TTL.
      *
      * @param iterable               $values A list of key => value pairs for a multiple-set operation.
-     * @param null|int|\DateInterval $ttl    Optional. The TTL value of this item. If no value is sent and
+     * @param null|int|DateInterval $ttl    Optional. The TTL value of this item. If no value is sent and
      *                                       the driver supports TTL then the library may set a default value
      *                                       for it or let the driver take care of that.
      *
@@ -159,7 +155,7 @@ final readonly class StaticCache implements CacheInterface
      *   or if any of the $values are not a legal value.
      */
     #[Override]
-    public function setMultiple(iterable $values, int|\DateInterval|null $ttl = null): bool
+    public function setMultiple(iterable $values, int|DateInterval|null $ttl = null): bool
     {
         // @mago-expect analysis:mixed-assignment
         // @mago-expect analysis:mixed-assignment
