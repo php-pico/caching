@@ -10,8 +10,10 @@ use Psr\SimpleCache\CacheInterface;
 /**
  * NoopCache.
  *
- * This cache driver caches nothing, meaning that all reads and writes always return NULL.
- * Useful for testing if you want to prevent your application from caching anything.
+ * This cache driver stores nothing. Reads always report a miss, returning the supplied default,
+ * while writes and deletions always report success because discarding the data is exactly the
+ * operation this driver performs. Useful for testing or for transparently disabling caching
+ * without tripping a caller's failure handling.
  */
 final readonly class NoopCache implements CacheInterface
 {
@@ -23,7 +25,7 @@ final readonly class NoopCache implements CacheInterface
      * @param string $key     The unique key of this item in the cache.
      * @param mixed  $default Default value to return if the key does not exist.
      *
-     * @return mixed The value of the item from the cache, or $default in case of cache miss.
+     * @return mixed Always $default, since this driver stores nothing and every read is a miss.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
@@ -33,7 +35,7 @@ final readonly class NoopCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        return null;
+        return $default;
     }
 
     /**
@@ -45,7 +47,7 @@ final readonly class NoopCache implements CacheInterface
      *                                      the driver supports TTL then the library may set a default value
      *                                      for it or let the driver take care of that.
      *
-     * @return bool True on success and false on failure.
+     * @return bool Always true, since discarding the value is the operation this driver performs and it cannot fail.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
@@ -55,7 +57,7 @@ final readonly class NoopCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        return false;
+        return true;
     }
 
     /**
@@ -63,7 +65,7 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param string $key The unique cache key of the item to delete.
      *
-     * @return bool True if the item was successfully removed. False if there was an error.
+     * @return bool Always true, since there is nothing to remove and the operation cannot fail.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
@@ -73,18 +75,18 @@ final readonly class NoopCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        return false;
+        return true;
     }
 
     /**
      * Wipes clean the entire cache's keys.
      *
-     * @return bool True on success and false on failure.
+     * @return bool Always true, since there is nothing to wipe and the operation cannot fail.
      */
     #[Override]
     public function clear(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -93,7 +95,7 @@ final readonly class NoopCache implements CacheInterface
      * @param iterable<string> $keys    A list of keys that can be obtained in a single operation.
      * @param mixed            $default Default value to return for keys that do not exist.
      *
-     * @return iterable<string, mixed> A list of key => value pairs. Cache keys that do not exist or are stale will have $default as value.
+     * @return iterable<string, mixed> A list of key => $default pairs; every key is a miss, since this driver stores nothing.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if $keys is neither an array nor a Traversable,
@@ -120,7 +122,7 @@ final readonly class NoopCache implements CacheInterface
      *                                       the driver supports TTL then the library may set a default value
      *                                       for it or let the driver take care of that.
      *
-     * @return bool True on success and false on failure.
+     * @return bool Always true, since discarding the values is the operation this driver performs and it cannot fail.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if $values is neither an array nor a Traversable,
@@ -139,7 +141,7 @@ final readonly class NoopCache implements CacheInterface
             $this->assertValidKey($key);
         }
 
-        return false;
+        return true;
     }
 
     /**
@@ -147,7 +149,7 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param iterable<string> $keys A list of string-based keys to be deleted.
      *
-     * @return bool True if the items were successfully removed. False if there was an error.
+     * @return bool Always true, since there is nothing to remove and the operation cannot fail.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if $keys is neither an array nor a Traversable,
@@ -160,7 +162,7 @@ final readonly class NoopCache implements CacheInterface
             $this->assertValidKey($key);
         }
 
-        return false;
+        return true;
     }
 
     /**
@@ -173,7 +175,7 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param string $key The cache item key.
      *
-     * @return bool
+     * @return bool Always false, since this driver stores nothing and never holds an item.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
