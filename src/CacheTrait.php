@@ -7,6 +7,10 @@ use DateTimeImmutable;
 
 trait CacheTrait
 {
+    public const int MAX_KEY_LENGTH = 64;
+
+    public const string KEY_PATTERN = '/^[A-Za-z0-9_.]+$/';
+
     /**
      * Check if a key is a legal value.
      *
@@ -21,7 +25,14 @@ trait CacheTrait
             throw new InvalidArgumentException('Cache key must not be empty');
         }
 
-        if (preg_match('/^[A-Za-z0-9_.]+$/', $key) !== 1) {
+        if (strlen($key) > self::MAX_KEY_LENGTH) {
+            throw new InvalidArgumentException(sprintf(
+                'Cache key must not be longer than %s characters',
+                self::MAX_KEY_LENGTH,
+            ));
+        }
+
+        if (preg_match(self::KEY_PATTERN, $key) !== 1) {
             throw new InvalidArgumentException('Cache key contains invalid characters');
         }
     }
