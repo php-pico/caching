@@ -2,3 +2,5 @@
 .code
 vendor
 .phpunit.result.cache
+tests/cache/*
+!tests/cache/.gitkeep
