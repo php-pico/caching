@@ -10,6 +10,11 @@ use JsonException;
 use Override;
 use Psr\SimpleCache\CacheInterface;
 
+/**
+ * FilesystemCache.
+ *
+ * Writes cache as files on disk.
+ */
 final readonly class FilesystemCache implements CacheInterface
 {
     use CacheTrait;
