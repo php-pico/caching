@@ -18,31 +18,14 @@ use Psr\SimpleCache\CacheInterface;
  */
 final readonly class StaticCache implements CacheInterface
 {
+    use CacheTrait;
+
     /** @var ArrayObject<array-key, array{expires: int|null, value: mixed}> */
     protected ArrayObject $cache;
 
     public function __construct()
     {
         $this->cache = new ArrayObject([]);
-    }
-
-    /**
-     * Check if a key is a legal value.
-     *
-     * @param string $key
-     *
-     * @return void
-     * @throws InvalidArgumentException If the cache key is invalid
-     */
-    public function assertValidKey(string $key): void
-    {
-        if ($key === '') {
-            throw new InvalidArgumentException('Cache key must not be empty');
-        }
-
-        if (preg_match('/^[A-Za-z0-9_.]+$/', $key) !== 1) {
-            throw new InvalidArgumentException('Cache key contains invalid characters');
-        }
     }
 
     /**
