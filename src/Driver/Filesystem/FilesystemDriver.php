@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
-namespace PhpPico\Caching\Driver;
+namespace PhpPico\Caching\Driver\Filesystem;
 
 use FilesystemIterator;
 use JsonException;
 use Override;
+use PhpPico\Caching\Driver\Driver;
+use PhpPico\Caching\Driver\DriverTrait;
 
 /**
  * FilesystemDriver.

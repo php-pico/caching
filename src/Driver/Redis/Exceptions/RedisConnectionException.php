@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace PhpPico\Caching;
+namespace PhpPico\Caching\Driver\Redis\Exceptions;
+
+use PhpPico\Caching\Exceptions\CacheException;
 
 /**
  * Thrown when the Redis transport fails: the socket could not be dialed, or the

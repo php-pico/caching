@@ -20,7 +20,7 @@ standard PSR-16 API:
 
 ```php
 use PhpPico\Caching\Cache;
-use PhpPico\Caching\Driver\StaticDriver;
+use PhpPico\Caching\Driver\Testing\StaticDriver;
 
 $cache = new Cache(new StaticDriver());
 
@@ -52,9 +52,9 @@ All drivers implement `PhpPico\Caching\Driver\Driver` and are interchangeable.
 
 ```php
 use PhpPico\Caching\Cache;
-use PhpPico\Caching\Driver\NoopDriver;
-use PhpPico\Caching\Driver\StaticDriver;
-use PhpPico\Caching\Driver\FilesystemDriver;
+use PhpPico\Caching\Driver\Testing\NoopDriver;
+use PhpPico\Caching\Driver\Testing\StaticDriver;
+use PhpPico\Caching\Driver\Filesystem\FilesystemDriver;
 
 new Cache(new StaticDriver());
 new Cache(new NoopDriver());
@@ -74,8 +74,8 @@ A `RedisDriver` takes a `RedisConnection`, built one of two ways.
 
 ```php
 use PhpPico\Caching\Cache;
-use PhpPico\Caching\Driver\RedisConnection;
-use PhpPico\Caching\Driver\RedisDriver;
+use PhpPico\Caching\Driver\Redis\RedisConnection;
+use PhpPico\Caching\Driver\Redis\RedisDriver;
 
 $connection = RedisConnection::build(
     host: '127.0.0.1',
@@ -125,8 +125,8 @@ connection built from a supplied stream cannot re-dial, so it surfaces the
 failure instead of reconnecting.
 
 Set `reconnectTries: 0` to disable reconnection. A transport failure that cannot
-be recovered throws `PhpPico\Caching\RedisConnectionException` (a subclass of the
-PSR-16 `CacheException`).
+be recovered throws `PhpPico\Caching\Driver\Redis\Exceptions\RedisConnectionException`
+(a subclass of the PSR-16 `CacheException`).
 
 ## Custom drivers
 

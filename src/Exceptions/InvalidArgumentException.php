@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace PhpPico\Caching;
+namespace PhpPico\Caching\Exceptions;
 
 use Exception;
 use Psr\SimpleCache\InvalidArgumentException as InvalidArgumentExceptionInterface;

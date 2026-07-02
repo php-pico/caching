@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace PhpPico\Caching\Tests;
 
 use PhpPico\Caching\Driver\Driver;
-use PhpPico\Caching\Driver\FilesystemDriver;
+use PhpPico\Caching\Driver\Filesystem\FilesystemDriver;
 use PHPUnit\Framework\Attributes\AfterClass;
 use PHPUnit\Framework\Attributes\BeforeClass;
 use PHPUnit\Framework\Attributes\CoversClass;

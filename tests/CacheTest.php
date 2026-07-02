@@ -8,7 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use PhpPico\Caching\Cache;
 use PhpPico\Caching\Driver\Driver;
-use PhpPico\Caching\Driver\StaticDriver;
+use PhpPico\Caching\Driver\Testing\StaticDriver;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;

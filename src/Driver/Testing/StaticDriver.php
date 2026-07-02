@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
-namespace PhpPico\Caching\Driver;
+namespace PhpPico\Caching\Driver\Testing;
 
 use ArrayObject;
 use Override;
+use PhpPico\Caching\Driver\Driver;
+use PhpPico\Caching\Driver\DriverTrait;
 
 /**
  * StaticDriver.

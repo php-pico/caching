@@ -8,6 +8,7 @@ use DateInterval;
 use DateTimeImmutable;
 use Override;
 use PhpPico\Caching\Driver\Driver;
+use PhpPico\Caching\Exceptions\InvalidArgumentException;
 use Psr\SimpleCache\CacheInterface;
 
 /**

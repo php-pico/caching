@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace PhpPico\Caching\Tests;
 
 use Override;
-use PhpPico\Caching\CacheException;
 use PhpPico\Caching\Driver\Driver;
-use PhpPico\Caching\Driver\RedisConnection;
-use PhpPico\Caching\Driver\RedisDriver;
-use PhpPico\Caching\RedisConnectionException;
+use PhpPico\Caching\Driver\Redis\Exceptions\RedisConnectionException;
+use PhpPico\Caching\Driver\Redis\RedisConnection;
+use PhpPico\Caching\Driver\Redis\RedisDriver;
+use PhpPico\Caching\Exceptions\CacheException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;

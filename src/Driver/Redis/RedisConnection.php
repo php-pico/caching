@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace PhpPico\Caching\Driver;
+namespace PhpPico\Caching\Driver\Redis;
 
-use PhpPico\Caching\CacheException;
-use PhpPico\Caching\RedisConnectionException;
+use PhpPico\Caching\Driver\Redis\Exceptions\RedisConnectionException;
+use PhpPico\Caching\Exceptions\CacheException;
 
 /**
  * RedisConnection.
