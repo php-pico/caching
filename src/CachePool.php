@@ -36,10 +36,6 @@ final class CachePool implements CacheItemPoolInterface
      */
     public function __destruct()
     {
-        if ($this->deferred === []) {
-            return;
-        }
-
         try {
             $this->commit();
         } catch (\Throwable) {
