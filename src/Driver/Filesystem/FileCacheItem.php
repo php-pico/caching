@@ -8,22 +8,21 @@ namespace PhpPico\Caching\Driver\Filesystem;
  * A single on-disk cache item for FilesystemDriver.
  *
  * The item IS the file: it owns its absolute path and performs its own reads and
- * writes. The expiration is encoded in the filename as `{key}.{expiresAt}.cache`
- * (a unix timestamp, or 0 for "never"), so expiry can be decided from the name
- * alone without opening and parsing the file. The file body holds only the
- * serialized payload.
+ * writes. The file is stored at `{key}.cache`, so it can be looked up, checked
+ * and deleted by exact path (a single stat), with no directory scan. The first
+ * line holds the expiration — a unix timestamp, or empty for "never" — and the
+ * remainder of the file is the serialized payload.
  *
  * Intentionally not shared with other drivers' item types: those may diverge.
  */
 final readonly class FileCacheItem
 {
-    protected const string SUFFIX = '.cache';
+    public const string SUFFIX = '.cache';
 
     protected function __construct(
-        public string $directory,
-        public string $key,
-        public ?int $expiresAt,
         public string $path,
+        public ?int $expiresAt,
+        protected ?string $value = null,
     ) {}
 
     /**
@@ -31,31 +30,36 @@ final readonly class FileCacheItem
      */
     public static function create(string $directory, string $key, ?int $expiresAt): self
     {
-        return new self($directory, $key, $expiresAt, self::pathFor($directory, $key, $expiresAt));
+        return new self(self::pathFor($directory, $key), $expiresAt);
     }
 
     /**
-     * Locate the item currently stored for a key, if any.
+     * Load the item stored for a key, reading its expiry and value, if present.
      */
     public static function find(string $directory, string $key): ?self
     {
-        $matches = glob(self::normalize($directory . DIRECTORY_SEPARATOR . self::escape($key) . '.*' . self::SUFFIX));
+        $path = self::pathFor($directory, $key);
 
-        if ($matches === false || $matches === []) {
+        if (!is_file($path)) {
             return null;
         }
 
-        $path = $matches[0];
-        $name = basename($path);
-        $stamp = substr($name, strlen($key . '.'), -strlen(self::SUFFIX));
+        $contents = file_get_contents($path);
 
-        if (!ctype_digit($stamp)) {
+        if ($contents === false) {
             return null;
         }
 
-        $expiresAt = (int) $stamp;
+        $newline = strpos($contents, "\n");
 
-        return new self($directory, $key, $expiresAt === 0 ? null : $expiresAt, $path);
+        if ($newline === false) {
+            return null;
+        }
+
+        $header = substr($contents, 0, $newline);
+        $value = substr($contents, $newline + 1);
+
+        return new self($path, $header === '' ? null : (int) $header, $value);
     }
 
     public function isExpired(): bool
@@ -64,29 +68,19 @@ final readonly class FileCacheItem
     }
 
     /**
-     * Persist a value, replacing any previously stored file for this key.
+     * The stored value, available once the item has been loaded via find().
      */
-    public function write(string $value): bool
+    public function value(): ?string
     {
-        foreach (self::existingPaths($this->directory, $this->key) as $stale) {
-            unlink($stale);
-        }
-
-        return file_put_contents($this->path, $value) !== false;
+        return $this->value;
     }
 
     /**
-     * Read the stored value, or null if the file has gone.
+     * Persist a value as `{expiry}\n{value}`.
      */
-    public function readValue(): ?string
+    public function write(string $value): bool
     {
-        if (!is_file($this->path)) {
-            return null;
-        }
-
-        $value = file_get_contents($this->path);
-
-        return $value === false ? null : $value;
+        return file_put_contents($this->path, ($this->expiresAt ?? '') . "\n" . $value) !== false;
     }
 
     public function delete(): bool
@@ -98,28 +92,8 @@ final readonly class FileCacheItem
         return unlink($this->path);
     }
 
-    protected static function pathFor(string $directory, string $key, ?int $expiresAt): string
+    protected static function pathFor(string $directory, string $key): string
     {
-        return self::normalize($directory . DIRECTORY_SEPARATOR . $key . '.' . ($expiresAt ?? 0) . self::SUFFIX);
-    }
-
-    /**
-     * @return list<string>
-     */
-    protected static function existingPaths(string $directory, string $key): array
-    {
-        $matches = glob(self::normalize($directory . DIRECTORY_SEPARATOR . self::escape($key) . '.*' . self::SUFFIX));
-
-        return $matches === false ? [] : $matches;
-    }
-
-    protected static function normalize(string $path): string
-    {
-        return (string) preg_replace('#/+#', '/', $path);
-    }
-
-    protected static function escape(string $key): string
-    {
-        return str_replace(['*', '?', '[', ']'], ['\\*', '\\?', '\\[', '\\]'], $key);
+        return (string) preg_replace('#/+#', '/', $directory . DIRECTORY_SEPARATOR . $key . self::SUFFIX);
     }
 }

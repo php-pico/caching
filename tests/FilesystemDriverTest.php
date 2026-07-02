@@ -83,6 +83,22 @@ final class FilesystemDriverTest extends TestCase
     }
 
     #[Test]
+    public function clear_only_removes_cache_files(): void
+    {
+        $driver = self::driver();
+        $driver->set('foo', 'bar');
+
+        $keep = self::driver()->dir . '/keep.txt';
+        file_put_contents($keep, 'not a cache file');
+
+        $this->assertTrue($driver->clear());
+        $this->assertFalse($driver->has('foo'));
+        $this->assertFileExists($keep);
+
+        unlink($keep);
+    }
+
+    #[Test]
     public function expired_entry_is_pruned_on_get(): void
     {
         $driver = self::driver();

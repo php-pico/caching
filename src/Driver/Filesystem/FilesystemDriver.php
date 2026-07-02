@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace PhpPico\Caching\Driver\Filesystem;
 
-use FilesystemIterator;
 use Override;
 use PhpPico\Caching\Driver\Driver;
 use PhpPico\Caching\Driver\DriverTrait;
@@ -12,9 +11,9 @@ use PhpPico\Caching\Driver\DriverTrait;
 /**
  * FilesystemDriver.
  *
- * Stores each cache item as a file on disk, represented by a FileCacheItem. The
- * expiration lives in the filename, so existence and freshness are decided
- * without opening the file; the body holds only the serialized payload.
+ * Stores each cache item as a file on disk, represented by a FileCacheItem. Each
+ * item lives at `{key}.cache`, so it is found and deleted by exact path; the file
+ * itself holds the expiration on its first line and the serialized payload after.
  */
 final readonly class FilesystemDriver implements Driver
 {
@@ -50,7 +49,7 @@ final readonly class FilesystemDriver implements Driver
             return null;
         }
 
-        return $item->readValue();
+        return $item->value();
     }
 
     #[Override]
@@ -70,14 +69,13 @@ final readonly class FilesystemDriver implements Driver
     #[Override]
     public function clear(): bool
     {
-        /** @var \SplFileInfo $file */
-        foreach (new FilesystemIterator($this->dir) as $file) {
-            if (!unlink($file->getPathname())) {
-                return false;
-            }
+        $success = true;
+
+        foreach (glob($this->dir . DIRECTORY_SEPARATOR . '*' . FileCacheItem::SUFFIX) ?: [] as $file) {
+            $success = unlink($file) && $success;
         }
 
-        return true;
+        return $success;
     }
 
     #[Override]
