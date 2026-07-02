@@ -7,4 +7,4 @@ namespace PhpPico\Caching;
 use Exception;
 use Psr\SimpleCache\CacheException as CacheExceptionInterface;
 
-final class CacheException extends Exception implements CacheExceptionInterface {}
+class CacheException extends Exception implements CacheExceptionInterface {}

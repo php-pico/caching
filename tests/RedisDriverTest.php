@@ -9,6 +9,7 @@ use PhpPico\Caching\CacheException;
 use PhpPico\Caching\Driver\Driver;
 use PhpPico\Caching\Driver\RedisConnection;
 use PhpPico\Caching\Driver\RedisDriver;
+use PhpPico\Caching\RedisConnectionException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -338,5 +339,55 @@ final class RedisDriverTest extends TestCase
     {
         $this->expectException(CacheException::class);
         RedisConnection::build(port: 0);
+    }
+
+    #[Test]
+    public function transport_failure_over_injected_stream_throws_and_does_not_retry(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        assert(is_array($pair));
+        [$clientEnd, $redisEnd] = $pair;
+
+        // The "Redis" end closes before replying, so the driver's read hits EOF.
+        fclose($redisEnd);
+
+        $driver = new RedisDriver(RedisConnection::fromStream($clientEnd));
+
+        $this->expectException(RedisConnectionException::class);
+        $driver->has('k');
+    }
+
+    #[Test]
+    public function reconnect_throws_for_a_connection_built_from_a_stream(): void
+    {
+        [$connection] = $this->connectionOverSocket(0);
+
+        $this->assertFalse($connection->canReconnect());
+
+        $this->expectException(RedisConnectionException::class);
+        $connection->reconnect();
+    }
+
+    #[Test]
+    public function build_connection_can_reconnect(): void
+    {
+        $connection = RedisConnection::build(host: '127.0.0.1', port: 6379);
+
+        $this->assertTrue($connection->canReconnect());
+    }
+
+    #[Test]
+    public function reconnect_tries_defaults_to_one_and_is_configurable(): void
+    {
+        $this->assertSame(1, RedisConnection::build()->reconnectTries());
+        $this->assertSame(3, RedisConnection::build(reconnectTries: 3)->reconnectTries());
+        $this->assertSame(0, RedisConnection::build(reconnectTries: 0)->reconnectTries());
+    }
+
+    #[Test]
+    public function build_throws_on_negative_reconnect_tries(): void
+    {
+        $this->expectException(CacheException::class);
+        RedisConnection::build(reconnectTries: -1);
     }
 }

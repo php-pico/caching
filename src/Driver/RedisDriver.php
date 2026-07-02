@@ -6,6 +6,7 @@ namespace PhpPico\Caching\Driver;
 
 use Override;
 use PhpPico\Caching\CacheException;
+use PhpPico\Caching\RedisConnectionException;
 
 /**
  * RedisDriver.
@@ -25,12 +26,40 @@ final readonly class RedisDriver implements Driver
     /**
      * Write a command and read its reply.
      *
+     * On a transport failure (a dropped connection), an idempotent command may be
+     * replayed after reconnecting. Callers MUST state whether replay is safe.
+     *
+     * Safe to pass $allowRetry = true (every command this driver issues): GET,
+     * SET/MSET/MSETEX (which use an absolute EXAT, so a delayed replay does not
+     * drift the TTL), DEL, EXISTS, FLUSHDB — running any of these twice yields the
+     * same final state.
+     *
+     * NOT safe (do not add with $allowRetry = true): read-modify-write commands
+     * whose repeat changes the result — INCR/DECR, APPEND, SETRANGE, GETDEL,
+     * LPUSH/RPUSH, HINCRBY, or SET with a relative EX/PX TTL. A protocol error (a
+     * Redis "-ERR" reply) is never retried regardless of $allowRetry.
+     *
+     * @param bool $allowRetry Whether this command is safe to replay after a reconnect.
+     *
+     * @return string|int|array<int, mixed>|null
+     * @throws CacheException On a protocol error, or a transport failure that could not be recovered.
+     */
+    protected function execute(bool $allowRetry, string ...$args): string|int|array|null
+    {
+        return $this->connection->retrying($allowRetry, fn(): string|int|array|null => $this->runCommand(...$args));
+    }
+
+    /**
      * @return string|int|array<int, mixed>|null
      * @throws CacheException If the Redis connection failed or replied with an error.
      */
-    public function execute(string ...$args): string|int|array|null
+    private function runCommand(string ...$args): string|int|array|null
     {
-        fwrite($this->connection->stream(), $this->buildRespCommand(...$args));
+        $command = $this->buildRespCommand(...$args);
+
+        if (@fwrite($this->connection->stream(), $command) !== strlen($command)) {
+            throw new RedisConnectionException('Redis connection closed while writing command');
+        }
 
         return $this->readReply();
     }
@@ -58,7 +87,7 @@ final readonly class RedisDriver implements Driver
     {
         $line = fgets($this->connection->stream());
         if ($line === false) {
-            throw new CacheException('Redis connection closed while reading reply');
+            throw new RedisConnectionException('Redis connection closed while reading reply');
         }
 
         $type = $line[0];
@@ -93,7 +122,7 @@ final readonly class RedisDriver implements Driver
         while ($remaining > 0) {
             $chunk = fread($stream, $remaining);
             if ($chunk === false || $chunk === '') {
-                throw new CacheException('Redis connection closed while reading');
+                throw new RedisConnectionException('Redis connection closed while reading');
             }
 
             $result .= $chunk;
@@ -130,7 +159,7 @@ final readonly class RedisDriver implements Driver
     #[Override]
     public function get(string $key): ?string
     {
-        $value = $this->execute('GET', $key);
+        $value = $this->execute(true, 'GET', $key);
 
         if (is_null($value)) {
             return null;
@@ -153,13 +182,19 @@ final readonly class RedisDriver implements Driver
             $args[] = (string) $expiresAt;
         }
 
-        return $this->execute(...$args) === 'OK';
+        return $this->execute(true, ...$args) === 'OK';
     }
 
+    /**
+     * Returns true unconditionally, ignoring the DEL reply count. Do not switch to
+     * returning whether the count was non-zero: DEL is only replay-safe after a
+     * reconnect because we discard the count (a replayed DEL returns 0 for a key
+     * the first, lost attempt already removed).
+     */
     #[Override]
     public function delete(string $key): bool
     {
-        $this->execute('DEL', $key);
+        $this->execute(true, 'DEL', $key);
 
         return true;
     }
@@ -167,7 +202,7 @@ final readonly class RedisDriver implements Driver
     #[Override]
     public function clear(): bool
     {
-        return $this->execute('FLUSHDB') === 'OK';
+        return $this->execute(true, 'FLUSHDB') === 'OK';
     }
 
     /**
@@ -182,7 +217,7 @@ final readonly class RedisDriver implements Driver
             return [];
         }
 
-        $values = $this->execute('MGET', ...$keys);
+        $values = $this->execute(true, 'MGET', ...$keys);
         if (!is_array($values)) {
             throw new CacheException('Redis replied with an invalid type for MGET.');
         }
@@ -214,7 +249,7 @@ final readonly class RedisDriver implements Driver
         }
 
         if (is_null($expiresAt)) {
-            return $this->execute('MSET', ...$args) === 'OK';
+            return $this->execute(true, 'MSET', ...$args) === 'OK';
         }
 
         $args = [
@@ -224,10 +259,12 @@ final readonly class RedisDriver implements Driver
             (string) $expiresAt,
         ];
 
-        return $this->execute('MSETEX', ...$args) === 1;
+        return $this->execute(true, 'MSETEX', ...$args) === 1;
     }
 
     /**
+     * Returns true unconditionally, ignoring the DEL reply count — see delete().
+     *
      * @param list<string> $keys
      */
     #[Override]
@@ -237,7 +274,7 @@ final readonly class RedisDriver implements Driver
             return true;
         }
 
-        $this->execute('DEL', ...$keys);
+        $this->execute(true, 'DEL', ...$keys);
 
         return true;
     }
@@ -245,6 +282,6 @@ final readonly class RedisDriver implements Driver
     #[Override]
     public function has(string $key): bool
     {
-        return $this->execute('EXISTS', $key) === 1;
+        return $this->execute(true, 'EXISTS', $key) === 1;
     }
 }
