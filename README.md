@@ -80,6 +80,10 @@ $pool->hasItem('a');                    // true (visible before commit)
 $pool->commit();                        // persist both
 ```
 
+If you forget `commit()`, the pool flushes any pending deferred items in its
+destructor, so they are still persisted when the pool is garbage-collected or the
+request ends — per PSR-6's guarantee that deferred items are not lost.
+
 Illegal keys throw a `Psr\Cache\InvalidArgumentException`. Because the exception
 implements both PSR interfaces, the PSR-16 and PSR-6 facades can share one driver
 and interoperate — a value written through one reads back through the other.

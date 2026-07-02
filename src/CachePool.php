@@ -28,6 +28,25 @@ final class CachePool implements CacheItemPoolInterface
         protected readonly Driver $driver,
     ) {}
 
+    /**
+     * Flush any items still deferred when the pool is destroyed, so PSR-6's
+     * guarantee that deferred items are not lost holds even without an explicit
+     * commit(). Best-effort: a failure at shutdown is swallowed so it cannot
+     * fatal during garbage collection.
+     */
+    public function __destruct()
+    {
+        if ($this->deferred === []) {
+            return;
+        }
+
+        try {
+            $this->commit();
+        } catch (\Throwable) {
+            // The backend is unreachable at shutdown; nothing more we can do.
+        }
+    }
+
     #[Override]
     public function getItem(string $key): CacheItemInterface
     {

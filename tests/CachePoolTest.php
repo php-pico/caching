@@ -148,6 +148,40 @@ final class CachePoolTest extends TestCase
     }
 
     #[Test]
+    public function destruct_commits_deferred_items_when_commit_was_forgotten(): void
+    {
+        $driver = new StaticDriver();
+
+        $pool = new CachePool($driver);
+        $pool->saveDeferred($pool->getItem('foo')->set('bar'));
+        unset($pool); // dropped without an explicit commit()
+
+        $this->assertSame('bar', new CachePool($driver)->getItem('foo')->get());
+    }
+
+    #[Test]
+    public function destruct_persists_via_the_driver_when_items_are_deferred(): void
+    {
+        $driver = $this->createMock(Driver::class);
+        $driver->method('get')->willReturn(null);
+        $driver->expects($this->once())->method('set')->with('foo', serialize('bar'), null)->willReturn(true);
+
+        $pool = new CachePool($driver);
+        $pool->saveDeferred($pool->getItem('foo')->set('bar'));
+        unset($pool);
+    }
+
+    #[Test]
+    public function destruct_does_nothing_when_no_items_are_deferred(): void
+    {
+        $driver = $this->createMock(Driver::class);
+        $driver->expects($this->never())->method('set');
+
+        $pool = new CachePool($driver);
+        unset($pool);
+    }
+
+    #[Test]
     public function save_serializes_the_value_and_passes_no_expiry_by_default(): void
     {
         $driver = $this->createMock(Driver::class);
