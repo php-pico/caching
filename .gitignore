@@ -2,3 +2,4 @@
 .code
 vendor
 .phpunit.result.cache
+tests/cache/*
