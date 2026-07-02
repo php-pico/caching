@@ -23,7 +23,7 @@ final readonly class Cache implements CacheInterface
     protected const string KEY_PATTERN = '/^[A-Za-z0-9_.]+$/';
 
     public function __construct(
-        protected Driver $driver,
+        public Driver $driver,
     ) {}
 
     /**

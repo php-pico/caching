@@ -275,7 +275,16 @@ final class RedisDriverTest extends TestCase
 
         $connection->select(2);
 
-        $this->assertSame(2, $connection->database);
+        $this->assertSame(2, $connection->currentDatabase());
+    }
+
+    #[Test]
+    public function driver_exposes_its_connection_for_introspection(): void
+    {
+        [$connection] = $this->connectionOverSocket(3, ":1\r\n");
+        $driver = new RedisDriver($connection);
+
+        $this->assertSame(3, $driver->connection->currentDatabase());
     }
 
     #[Test]

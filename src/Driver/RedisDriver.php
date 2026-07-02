@@ -19,16 +19,8 @@ final readonly class RedisDriver implements Driver
     use DriverTrait;
 
     public function __construct(
-        protected RedisConnection $connection,
+        public RedisConnection $connection,
     ) {}
-
-    /**
-     * @return resource
-     */
-    protected function stream()
-    {
-        return $this->connection->stream();
-    }
 
     /**
      * Write a command and read its reply.
@@ -38,7 +30,7 @@ final readonly class RedisDriver implements Driver
      */
     public function execute(string ...$args): string|int|array|null
     {
-        fwrite($this->stream(), $this->buildRespCommand(...$args));
+        fwrite($this->connection->stream(), $this->buildRespCommand(...$args));
 
         return $this->readReply();
     }
@@ -64,7 +56,7 @@ final readonly class RedisDriver implements Driver
      */
     public function readReply(): string|int|array|null
     {
-        $line = fgets($this->stream());
+        $line = fgets($this->connection->stream());
         if ($line === false) {
             throw new CacheException('Redis connection closed while reading reply');
         }
@@ -94,7 +86,7 @@ final readonly class RedisDriver implements Driver
             return null;
         }
 
-        $stream = $this->stream();
+        $stream = $this->connection->stream();
 
         $result = '';
         $remaining = $len;

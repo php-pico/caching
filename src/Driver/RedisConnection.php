@@ -28,9 +28,21 @@ final class RedisConnection
         protected readonly ?string $host,
         protected readonly ?int $port,
         protected readonly ?int $timeoutSeconds,
-        public int $database,
+        protected int $database,
     ) {
         $this->stream = $stream;
+    }
+
+    /**
+     * The database index currently selected on this connection.
+     *
+     * Reflects the last database this connection successfully selected: the one
+     * it was built with, or the argument of the most recent select() call that
+     * Redis acknowledged. Useful for asserting which keyspace commands run against.
+     */
+    public function currentDatabase(): int
+    {
+        return $this->database;
     }
 
     /**
