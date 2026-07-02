@@ -1,11 +1,13 @@
 # php-pico/caching
 
-A dependency-light PSR-16 (`psr/simple-cache`) cache for PHP 8.5+.
+A dependency-light PSR-16 (`psr/simple-cache`) and PSR-6 (`psr/cache`) cache for
+PHP 8.5+.
 
-A single `Cache` class implements the PSR-16 `CacheInterface` and delegates
-storage to a swappable **driver**. The `Cache` class owns key validation, value
-(de)serialization and TTL handling; each driver only stores and retrieves the
-resulting string payloads. This keeps drivers thin and independently testable.
+Two facades — the PSR-16 `Cache` and the PSR-6 `CachePool` — sit over the same
+swappable **drivers**. The facades own key validation, value (de)serialization
+and TTL handling; each driver only stores and retrieves the resulting string
+payloads. This keeps drivers thin, interchangeable, and independently testable,
+and lets both standards share one backend.
 
 ## Installation
 
@@ -13,7 +15,7 @@ resulting string payloads. This keeps drivers thin and independently testable.
 composer require php-pico/caching
 ```
 
-## Usage
+## PSR-16 (simple cache)
 
 Construct a `Cache` with the driver of your choice and use it through the
 standard PSR-16 API:
@@ -39,9 +41,53 @@ $cache->clear();
 behave per the PSR-16 spec. Keys are validated (max 64 chars, `[A-Za-z0-9_.]`);
 an illegal key throws a PSR-16 `InvalidArgumentException`.
 
+## PSR-6 (cache item pool)
+
+Construct a `CachePool` with the same drivers and use the PSR-6 item API. Items
+are obtained from the pool via `getItem()`/`getItems()` — never instantiated
+directly.
+
+```php
+use PhpPico\Caching\CachePool;
+use PhpPico\Caching\Driver\Filesystem\FilesystemDriver;
+
+$pool = new CachePool(new FilesystemDriver('/var/cache/app'));
+
+$item = $pool->getItem('user.42');
+if (!$item->isHit()) {
+    $item->set(['name' => 'Ada'])->expiresAfter(3600);
+    $pool->save($item);
+}
+$item->get();                           // ['name' => 'Ada']
+
+$pool->hasItem('user.42');              // true
+$pool->deleteItem('user.42');
+$pool->clear();
+```
+
+Expiration is set on the item with `expiresAfter(int|\DateInterval|null)` or
+`expiresAt(?\DateTimeInterface)`. `getItem()` always returns an item (never null)
+— a miss is an item whose `isHit()` is `false` and whose `get()` is `null`.
+
+**Deferred writes.** Queue items and flush them together with `commit()`. A
+deferred item is already visible to `getItem()`/`hasItem()` before the commit:
+
+```php
+$pool->saveDeferred($pool->getItem('a')->set(1));
+$pool->saveDeferred($pool->getItem('b')->set(2));
+
+$pool->hasItem('a');                    // true (visible before commit)
+$pool->commit();                        // persist both
+```
+
+Illegal keys throw a `Psr\Cache\InvalidArgumentException`. Because the exception
+implements both PSR interfaces, the PSR-16 and PSR-6 facades can share one driver
+and interoperate — a value written through one reads back through the other.
+
 ## Drivers
 
-All drivers implement `PhpPico\Caching\Driver\Driver` and are interchangeable.
+All drivers implement `PhpPico\Caching\Driver\Driver` and are interchangeable
+between the PSR-16 `Cache` and the PSR-6 `CachePool`.
 
 | Driver | Backing store | Persistence | Notes |
 |--------|---------------|-------------|-------|
@@ -131,10 +177,11 @@ be recovered throws `PhpPico\Caching\Driver\Redis\Exceptions\RedisConnectionExce
 ## Custom drivers
 
 Implement `PhpPico\Caching\Driver\Driver`. Drivers operate on already-serialized
-`string` payloads and an absolute `?int $expiresAt` timestamp — the `Cache` class
-handles validation and (de)serialization. The `DriverTrait` provides naive
+`string` payloads and an absolute `?int $expiresAt` timestamp — the facades
+handle key validation and (de)serialization. The `DriverTrait` provides naive
 multi-key operations built on the single-key methods, so a driver only has to
-implement `get`/`set`/`delete`/`clear`/`has`.
+implement `get`/`set`/`delete`/`clear`/`has`. A new driver works with both the
+PSR-16 and PSR-6 facades automatically.
 
 ## Development
 
