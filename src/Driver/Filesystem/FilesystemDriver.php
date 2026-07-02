@@ -25,12 +25,12 @@ final readonly class FilesystemDriver implements Driver
     public function __construct(
         public string $dir,
     ) {
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        if (preg_match('#(^|[/\\\\])\.\.([/\\\\]|$)#', $dir) === 1 || str_contains($dir, "\x00")) {
+            throw new \InvalidArgumentException('Directory traversal detected.');
         }
 
-        if (str_contains($dir, '..')) {
-            throw new \InvalidArgumentException('Directory traversal detected.');
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
         }
     }
 

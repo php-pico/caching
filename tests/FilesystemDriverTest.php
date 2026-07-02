@@ -10,6 +10,7 @@ use PhpPico\Caching\Driver\Filesystem\FilesystemDriver;
 use PHPUnit\Framework\Attributes\AfterClass;
 use PHPUnit\Framework\Attributes\BeforeClass;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -36,10 +37,46 @@ final class FilesystemDriverTest extends TestCase
     }
 
     #[Test]
-    public function constructor_throws_on_directory_traversal(): void
+    #[DataProvider('traversalDirs')]
+    public function constructor_throws_on_directory_traversal(string $dir): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        self::driver('../parent');
+        new FilesystemDriver($dir);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function traversalDirs(): array
+    {
+        return [
+            'relative parent' => [__DIR__ . '/../parent'],
+            'leading traversal' => ['../escape'],
+            'null byte' => ["/tmp/cache\x00/x"],
+        ];
+    }
+
+    #[Test]
+    public function constructor_does_not_create_a_traversal_directory(): void
+    {
+        $escaped = __DIR__ . '/../pico-traversal-should-not-exist';
+
+        try {
+            new FilesystemDriver($escaped);
+            $this->fail('Expected traversal to be rejected');
+        } catch (\InvalidArgumentException) {
+            $this->assertDirectoryDoesNotExist($escaped);
+        }
+    }
+
+    #[Test]
+    public function constructor_accepts_a_path_that_merely_contains_dots(): void
+    {
+        $dir = __DIR__ . '/cache..data';
+
+        $this->assertInstanceOf(FilesystemDriver::class, new FilesystemDriver($dir));
+
+        rmdir($dir);
     }
 
     #[Test]
