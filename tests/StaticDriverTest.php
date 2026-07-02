@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace PhpPico\Caching\Tests;
 
 use PhpPico\Caching\Driver\Driver;
+use PhpPico\Caching\Driver\Testing\StaticCacheItem;
 use PhpPico\Caching\Driver\Testing\StaticDriver;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StaticDriver::class)]
+#[CoversClass(StaticCacheItem::class)]
 final class StaticDriverTest extends TestCase
 {
     private function driver(): StaticDriver

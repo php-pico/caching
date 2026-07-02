@@ -19,7 +19,7 @@ final readonly class StaticDriver implements Driver
 {
     use DriverTrait;
 
-    /** @var ArrayObject<string, array{expires: int|null, value: string}> */
+    /** @var ArrayObject<string, StaticCacheItem> */
     protected ArrayObject $cache;
 
     public function __construct()
@@ -34,16 +34,13 @@ final readonly class StaticDriver implements Driver
             return null;
         }
 
-        return $this->cache->offsetGet($key)['value'];
+        return $this->cache->offsetGet($key)->value;
     }
 
     #[Override]
     public function set(string $key, string $value, ?int $expiresAt = null): bool
     {
-        $this->cache->offsetSet($key, [
-            'expires' => $expiresAt,
-            'value' => $value,
-        ]);
+        $this->cache->offsetSet($key, new StaticCacheItem($value, $expiresAt));
 
         return true;
     }
@@ -75,12 +72,6 @@ final readonly class StaticDriver implements Driver
             return false;
         }
 
-        $item = $this->cache->offsetGet($key);
-
-        if (is_null($item['expires'])) {
-            return true;
-        }
-
-        return $item['expires'] > time();
+        return !$this->cache->offsetGet($key)->isExpired();
     }
 }
