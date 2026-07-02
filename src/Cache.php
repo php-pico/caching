@@ -4,20 +4,64 @@ declare(strict_types=1);
 
 namespace PhpPico\Caching;
 
+use DateInterval;
+use DateTimeImmutable;
 use Override;
+use PhpPico\Caching\Driver\Driver;
 use Psr\SimpleCache\CacheInterface;
 
 /**
- * NoopCache.
+ * Cache.
  *
- * This cache driver stores nothing. Reads always report a miss, returning the supplied default,
- * while writes and deletions always report success because discarding the data is exactly the
- * operation this driver performs. Useful for testing or for transparently disabling caching
- * without tripping a caller's failure handling.
+ * A PSR-16 cache that owns key validation, value (de)serialization and
+ * TTL-to-timestamp conversion, delegating storage to a swappable {@see Driver}.
  */
-final readonly class NoopCache implements CacheInterface
+final readonly class Cache implements CacheInterface
 {
-    use CacheTrait;
+    protected const int MAX_KEY_LENGTH = 64;
+
+    protected const string KEY_PATTERN = '/^[A-Za-z0-9_.]+$/';
+
+    public function __construct(
+        protected Driver $driver,
+    ) {}
+
+    /**
+     * @throws InvalidArgumentException If the cache key is invalid.
+     */
+    protected function assertValidKey(string $key): void
+    {
+        if ($key === '') {
+            throw new InvalidArgumentException('Cache key must not be empty');
+        }
+
+        if (strlen($key) > self::MAX_KEY_LENGTH) {
+            throw new InvalidArgumentException(sprintf(
+                'Cache key must not be longer than %s characters',
+                self::MAX_KEY_LENGTH,
+            ));
+        }
+
+        if (preg_match(self::KEY_PATTERN, $key) !== 1) {
+            throw new InvalidArgumentException('Cache key contains invalid characters');
+        }
+    }
+
+    /**
+     * @return int|null NULL for no expiration, otherwise an absolute unix timestamp.
+     */
+    protected function calculateExpiration(int|DateInterval|null $ttl): ?int
+    {
+        if (is_null($ttl)) {
+            return null;
+        }
+
+        if (is_int($ttl)) {
+            return time() + $ttl;
+        }
+
+        return new DateTimeImmutable()->add($ttl)->getTimestamp();
+    }
 
     /**
      * Fetches a value from the cache.
@@ -25,7 +69,7 @@ final readonly class NoopCache implements CacheInterface
      * @param string $key     The unique key of this item in the cache.
      * @param mixed  $default Default value to return if the key does not exist.
      *
-     * @return mixed Always $default, since this driver stores nothing and every read is a miss.
+     * @return mixed The value of the item from the cache, or $default in case of cache miss.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
@@ -35,7 +79,9 @@ final readonly class NoopCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        return $default;
+        $raw = $this->driver->get($key);
+
+        return $raw === null ? $default : unserialize($raw);
     }
 
     /**
@@ -43,21 +89,21 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param string                 $key   The key of the item to store.
      * @param mixed                  $value The value of the item to store, must be serializable.
-     * @param null|int|\DateInterval $ttl   Optional. The TTL value of this item. If no value is sent and
+     * @param null|int|DateInterval $ttl   Optional. The TTL value of this item. If no value is sent and
      *                                      the driver supports TTL then the library may set a default value
      *                                      for it or let the driver take care of that.
      *
-     * @return bool Always true, since discarding the value is the operation this driver performs and it cannot fail.
+     * @return bool True on success and false on failure.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
      */
     #[Override]
-    public function set(string $key, mixed $value, int|\DateInterval|null $ttl = null): bool
+    public function set(string $key, mixed $value, int|DateInterval|null $ttl = null): bool
     {
         $this->assertValidKey($key);
 
-        return true;
+        return $this->driver->set($key, serialize($value), $this->calculateExpiration($ttl));
     }
 
     /**
@@ -65,7 +111,7 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param string $key The unique cache key of the item to delete.
      *
-     * @return bool Always true, since there is nothing to remove and the operation cannot fail.
+     * @return bool True if the item was successfully removed. False if there was an error.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
@@ -75,18 +121,18 @@ final readonly class NoopCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        return true;
+        return $this->driver->delete($key);
     }
 
     /**
      * Wipes clean the entire cache's keys.
      *
-     * @return bool Always true, since there is nothing to wipe and the operation cannot fail.
+     * @return bool True on success and false on failure.
      */
     #[Override]
     public function clear(): bool
     {
-        return true;
+        return $this->driver->clear();
     }
 
     /**
@@ -95,7 +141,7 @@ final readonly class NoopCache implements CacheInterface
      * @param iterable<string> $keys    A list of keys that can be obtained in a single operation.
      * @param mixed            $default Default value to return for keys that do not exist.
      *
-     * @return iterable<string, mixed> A list of key => $default pairs; every key is a miss, since this driver stores nothing.
+     * @return iterable<string, mixed> A list of key => value pairs. Cache keys that do not exist or are stale will have $default as value.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if $keys is neither an array nor a Traversable,
@@ -104,11 +150,22 @@ final readonly class NoopCache implements CacheInterface
     #[Override]
     public function getMultiple(iterable $keys, mixed $default = null): iterable
     {
-        $result = [];
+        $keys = is_array($keys) ? $keys : iterator_to_array($keys, false);
+
+        if ($keys === []) {
+            return [];
+        }
 
         foreach ($keys as $key) {
             $this->assertValidKey($key);
-            $result[$key] = $default;
+        }
+
+        $raws = $this->driver->getMultiple(array_values($keys));
+
+        $result = [];
+        foreach ($keys as $key) {
+            $raw = $raws[$key] ?? null;
+            $result[$key] = is_string($raw) ? unserialize($raw) : $default;
         }
 
         return $result;
@@ -118,20 +175,26 @@ final readonly class NoopCache implements CacheInterface
      * Persists a set of key => value pairs in the cache, with an optional TTL.
      *
      * @param iterable               $values A list of key => value pairs for a multiple-set operation.
-     * @param null|int|\DateInterval $ttl    Optional. The TTL value of this item. If no value is sent and
+     * @param null|int|DateInterval $ttl    Optional. The TTL value of this item. If no value is sent and
      *                                       the driver supports TTL then the library may set a default value
      *                                       for it or let the driver take care of that.
      *
-     * @return bool Always true, since discarding the values is the operation this driver performs and it cannot fail.
+     * @return bool True on success and false on failure.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if $values is neither an array nor a Traversable,
      *   or if any of the $values are not a legal value.
      */
     #[Override]
-    public function setMultiple(iterable $values, int|\DateInterval|null $ttl = null): bool
+    public function setMultiple(iterable $values, int|DateInterval|null $ttl = null): bool
     {
-        // @mago-expect analysis:mixed-assignment
+        $values = is_array($values) ? $values : iterator_to_array($values);
+
+        if ($values === []) {
+            return true;
+        }
+
+        $serialized = [];
         // @mago-expect analysis:mixed-assignment
         foreach ($values as $key => $value) {
             if (!is_string($key)) {
@@ -139,9 +202,10 @@ final readonly class NoopCache implements CacheInterface
             }
 
             $this->assertValidKey($key);
+            $serialized[$key] = serialize($value);
         }
 
-        return true;
+        return $this->driver->setMultiple($serialized, $this->calculateExpiration($ttl));
     }
 
     /**
@@ -149,7 +213,7 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param iterable<string> $keys A list of string-based keys to be deleted.
      *
-     * @return bool Always true, since there is nothing to remove and the operation cannot fail.
+     * @return bool True if the items were successfully removed. False if there was an error.
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if $keys is neither an array nor a Traversable,
@@ -158,11 +222,13 @@ final readonly class NoopCache implements CacheInterface
     #[Override]
     public function deleteMultiple(iterable $keys): bool
     {
+        $keys = is_array($keys) ? $keys : iterator_to_array($keys, false);
+
         foreach ($keys as $key) {
             $this->assertValidKey($key);
         }
 
-        return true;
+        return $this->driver->deleteMultiple(array_values($keys));
     }
 
     /**
@@ -175,7 +241,7 @@ final readonly class NoopCache implements CacheInterface
      *
      * @param string $key The cache item key.
      *
-     * @return bool Always false, since this driver stores nothing and never holds an item.
+     * @return bool
      *
      * @throws \Psr\SimpleCache\InvalidArgumentException
      *   MUST be thrown if the $key string is not a legal value.
@@ -185,6 +251,6 @@ final readonly class NoopCache implements CacheInterface
     {
         $this->assertValidKey($key);
 
-        return false;
+        return $this->driver->has($key);
     }
 }
