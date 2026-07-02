@@ -92,8 +92,15 @@ final readonly class FileCacheItem
         return unlink($this->path);
     }
 
+    /**
+     * @throws \InvalidArgumentException If the key could escape the cache directory.
+     */
     protected static function pathFor(string $directory, string $key): string
     {
+        if (preg_match('#[/\\\\\x00]#', $key) === 1) {
+            throw new \InvalidArgumentException('Cache key must not contain path separators.');
+        }
+
         return (string) preg_replace('#/+#', '/', $directory . DIRECTORY_SEPARATOR . $key . self::SUFFIX);
     }
 }

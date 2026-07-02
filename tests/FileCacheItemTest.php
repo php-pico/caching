@@ -8,6 +8,7 @@ use PhpPico\Caching\Driver\Filesystem\FileCacheItem;
 use PHPUnit\Framework\Attributes\AfterClass;
 use PHPUnit\Framework\Attributes\BeforeClass;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -120,5 +121,26 @@ final class FileCacheItemTest extends TestCase
 
         $this->assertTrue(FileCacheItem::find(self::dir(), 'temp')?->delete());
         $this->assertNull(FileCacheItem::find(self::dir(), 'temp'));
+    }
+
+    #[Test]
+    #[DataProvider('traversalKeys')]
+    public function rejects_keys_that_could_escape_the_directory(string $key): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        FileCacheItem::create(self::dir(), $key, null);
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function traversalKeys(): array
+    {
+        return [
+            'unix traversal' => ['../../etc/passwd'],
+            'forward slash' => ['sub/dir'],
+            'backslash' => ['sub\\dir'],
+            'null byte' => ["foo\x00.png"],
+        ];
     }
 }
